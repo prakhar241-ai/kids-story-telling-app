@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
-import { searchStories, listSearchItems } from './db/stories.js'
-import { checkKeyword } from './safety.js'
+import { searchStories, listSearchItems } from '../shared/storyBank.js'
+import { checkKeyword } from '../shared/safety.js'
 
 const app = express()
 const PORT = 3001
@@ -17,14 +17,12 @@ app.post('/api/story', (req, res) => {
     return res.status(400).json({ error: 'Please choose an age group and language.' })
   }
 
-  // Kid-safe keyword filter
   const safe = checkKeyword(keyword)
   if (!safe.ok) {
     return res.json({ blocked: true, message: safe.message, stories: [] })
   }
 
-  const stories = searchStories({ keyword, age, language })
-  res.json({ stories })
+  res.json({ stories: searchStories({ keyword, age, language }) })
 })
 
 // List of searchable words (for the tappable chips)

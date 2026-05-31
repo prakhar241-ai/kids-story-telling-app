@@ -1,42 +1,40 @@
-// Builds stories.db from storyData.js.
-// Run with:  node backend/db/seed.js   (from the project root)
-// Safe to re-run — it rebuilds the tables from scratch each time.
+// Builds stories.db — the queryable copy of the story bank.
+// The app does NOT need this file at runtime (it generates stories in
+// memory from shared/storyBank.js). This DB is for browsing/querying the
+// stories directly with SQL tools.
+//
+// Run with:  npm run seed --prefix backend   (or: node backend/db/seed.js)
 import { DatabaseSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { SUBJECTS, TEMPLATES } from './storyData.js'
+import { STORIES, SEARCH_ITEMS } from '../../shared/storyBank.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 export const DB_PATH = join(__dirname, 'stories.db')
 
-const AGE_GROUPS = ['2-3', '4-6', '7-9']
-const LANGUAGES = ['english', 'hindi']
-
 function build() {
   const db = new DatabaseSync(DB_PATH)
 
-  // Fresh start every run
   db.exec(`DROP TABLE IF EXISTS stories;`)
   db.exec(`DROP TABLE IF EXISTS search_items;`)
 
   db.exec(`
     CREATE TABLE search_items (
       id        INTEGER PRIMARY KEY,
-      key       TEXT UNIQUE,   -- canonical lowercase english (e.g. 'lion')
-      term      TEXT,          -- English label (e.g. 'Lion')
-      term_hi   TEXT,          -- Hindi label (e.g. 'शेर')
+      key       TEXT UNIQUE,
+      term      TEXT,
+      term_hi   TEXT,
       category  TEXT
     );
   `)
-
   db.exec(`
     CREATE TABLE stories (
       id          INTEGER PRIMARY KEY,
-      subject_key TEXT,    -- links to search_items.key
-      subject     TEXT,    -- subject name shown for this language
+      subject_key TEXT,
+      subject     TEXT,
       category    TEXT,
-      age_group   TEXT,    -- '2-3' | '4-6' | '7-9'
-      language    TEXT,    -- 'english' | 'hindi'
+      age_group   TEXT,
+      language    TEXT,
       title       TEXT,
       body        TEXT,
       moral       TEXT
@@ -47,43 +45,17 @@ function build() {
   const insertItem = db.prepare(
     `INSERT INTO search_items (key, term, term_hi, category) VALUES (?, ?, ?, ?)`
   )
+  for (const it of SEARCH_ITEMS) {
+    insertItem.run(it.key, it.term, it.term_hi, it.category)
+  }
+
   const insertStory = db.prepare(
     `INSERT INTO stories (subject_key, subject, category, age_group, language, title, body, moral)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   )
-
-  // Templates grouped by age for easy rotation
-  const byAge = {}
-  for (const age of AGE_GROUPS) {
-    byAge[age] = TEMPLATES.filter((t) => t.ages.includes(age))
+  for (const s of STORIES) {
+    insertStory.run(s.subjectKey, s.subject, s.category, s.ageGroup, s.language, s.title, s.body, s.moral)
   }
-
-  let storyCount = 0
-  SUBJECTS.forEach((sub, i) => {
-    const key = sub.term.toLowerCase()
-    insertItem.run(key, sub.term, sub.termHi, sub.category)
-
-    const ctx = {
-      hero: sub.term,
-      heroHi: sub.termHi,
-      place: sub.place,
-      placeHi: sub.placeHi,
-    }
-
-    for (const age of AGE_GROUPS) {
-      const pool = byAge[age]
-      // rotate templates across subjects so neighbours differ
-      const tpl = pool[i % pool.length]
-
-      const en = tpl.en(ctx)
-      insertStory.run(key, sub.term, sub.category, age, 'english', en.title, en.body, en.moral)
-      storyCount++
-
-      const hi = tpl.hi(ctx)
-      insertStory.run(key, sub.termHi, sub.category, age, 'hindi', hi.title, hi.body, hi.moral)
-      storyCount++
-    }
-  })
 
   const items = db.prepare(`SELECT COUNT(*) AS n FROM search_items`).get().n
   const total = db.prepare(`SELECT COUNT(*) AS n FROM stories`).get().n
@@ -92,7 +64,7 @@ function build() {
 
   console.log(`✅ Database built at ${DB_PATH}`)
   console.log(`   Search items: ${items}`)
-  console.log(`   Stories total: ${total}  (generated ${storyCount})`)
+  console.log(`   Stories total: ${total}`)
   perLang.forEach((r) => console.log(`     - ${r.language}: ${r.n}`))
 }
 
