@@ -31,6 +31,26 @@ function App() {
   const [steps, setSteps] = useState(IDLE_STEPS)
   const [result, setResult] = useState(null) // { title, story, moral }
   const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  // Builds the shareable text from the finished story
+  const buildShareText = () =>
+    `${result.title}\n\n${result.story}\n\n💡 ${result.moral}\n\n— @kidsarebest22`
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(buildShareText())
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Could not copy. Please select and copy the text manually.')
+    }
+  }
+
+  const handleWhatsApp = () => {
+    const url = `https://wa.me/?text=${encodeURIComponent(buildShareText())}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -199,6 +219,15 @@ function App() {
             <div className="moral-box">
               <span className="moral-label">💡 Moral</span>
               <p className="moral-text">{result.moral}</p>
+            </div>
+
+            <div className="share-buttons">
+              <button type="button" className="share-btn copy-btn" onClick={handleCopy}>
+                {copied ? '✅ Copied!' : '📋 Copy story'}
+              </button>
+              <button type="button" className="share-btn whatsapp-btn" onClick={handleWhatsApp}>
+                💬 Share on WhatsApp
+              </button>
             </div>
           </div>
         )}

@@ -332,6 +332,57 @@ input[type='text']::placeholder {
   line-height: 1.5;
 }
 
+/* ── Share / Copy buttons ── */
+.share-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.share-btn {
+  flex: 1;
+  padding: 13px 10px;
+  border: none;
+  border-radius: 14px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-family: inherit;
+  color: white;
+}
+
+.share-btn:hover {
+  transform: translateY(-2px);
+}
+
+.share-btn:active {
+  transform: translateY(0);
+}
+
+.copy-btn {
+  background: #6c5ce7;
+}
+
+.copy-btn:hover {
+  box-shadow: 0 6px 16px rgba(108, 92, 231, 0.45);
+}
+
+.whatsapp-btn {
+  background: #25d366;
+}
+
+.whatsapp-btn:hover {
+  box-shadow: 0 6px 16px rgba(37, 211, 102, 0.45);
+}
+
+/* Stack the buttons on very small screens */
+@media (max-width: 400px) {
+  .share-buttons {
+    flex-direction: column;
+  }
+}
+
 /* ── Footer ── */
 .footer {
   text-align: center;
