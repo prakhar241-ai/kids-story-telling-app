@@ -33,6 +33,11 @@ function isBlocked(kw) {
   return BLOCKED.some((bad) => lower.includes(bad))
 }
 
+// Browser voice support (free, no API key)
+const TTS_SUPPORTED = typeof window !== 'undefined' && 'speechSynthesis' in window
+const SpeechRec = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null
+const STT_SUPPORTED = !!SpeechRec
+
 function App() {
   const [keyword, setKeyword] = useState('')
   const [age, setAge] = useState('')
@@ -45,6 +50,8 @@ function App() {
   const [copied, setCopied] = useState(false)
   const [fontSize, setFontSize] = useState('Medium')
   const [reaction, setReaction] = useState(null)
+  const [speaking, setSpeaking] = useState(false)
+  const [listening, setListening] = useState(false)
 
   // Load the searchable words once (for the chips, with Hindi labels)
   useEffect(() => {
@@ -62,7 +69,51 @@ function App() {
     return found ? found.term_hi : englishTerm
   }
 
+  // ── Voice: read the story aloud (text-to-speech) ──
+  const stopSpeaking = () => {
+    if (TTS_SUPPORTED) window.speechSynthesis.cancel()
+    setSpeaking(false)
+  }
+
+  const toggleSpeak = () => {
+    if (!current) return
+    if (speaking) { stopSpeaking(); return }
+
+    const text = `${current.title}.\n\n${current.body}\n\nThe End! Remember: ${current.moral}`
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = language === 'hindi' ? 'hi-IN' : 'en-US'
+    u.rate = 0.9   // a little slower for kids
+    u.pitch = 1.1  // a little friendlier
+    const voices = window.speechSynthesis.getVoices()
+    const match = voices.find((v) => v.lang === u.lang) || voices.find((v) => v.lang.startsWith(u.lang.slice(0, 2)))
+    if (match) u.voice = match
+    u.onend = () => setSpeaking(false)
+    u.onerror = () => setSpeaking(false)
+
+    window.speechSynthesis.cancel()
+    window.speechSynthesis.speak(u)
+    setSpeaking(true)
+  }
+
+  // ── Voice: say a word to search (speech-to-text) ──
+  const startListening = () => {
+    if (!STT_SUPPORTED || listening) return
+    const rec = new SpeechRec()
+    rec.lang = language === 'hindi' ? 'hi-IN' : 'en-US'
+    rec.interimResults = false
+    rec.maxAlternatives = 1
+    rec.onresult = (e) => {
+      const said = (e.results[0][0].transcript || '').trim().replace(/[.।!?]+$/, '')
+      setKeyword(said)
+      runSearch(said)
+    }
+    rec.onend = () => setListening(false)
+    rec.onerror = () => setListening(false)
+    try { rec.start(); setListening(true) } catch { setListening(false) }
+  }
+
   const runSearch = async (kw) => {
+    stopSpeaking()
     if (!age || !language) {
       setMessage('Please pick an age and a language first! 🙂')
       return
@@ -175,6 +226,18 @@ function App() {
                 maxLength={30}
                 disabled={loading}
               />
+              {STT_SUPPORTED && (
+                <button
+                  type="button"
+                  className={`mic-btn ${listening ? 'listening' : ''}`}
+                  onClick={startListening}
+                  disabled={loading}
+                  title="Say a word"
+                  aria-label="Search by voice"
+                >
+                  {listening ? '🎙️' : '🎤'}
+                </button>
+              )}
               <button type="button" className="surprise-btn" onClick={handleSurprise} disabled={loading}>
                 🎲 Surprise Me!
               </button>
@@ -258,6 +321,17 @@ function App() {
             </div>
 
             <h2 className="story-title">{current.title}</h2>
+
+            {TTS_SUPPORTED && (
+              <button
+                type="button"
+                className={`listen-btn ${speaking ? 'speaking' : ''}`}
+                onClick={toggleSpeak}
+              >
+                {speaking ? '⏹️ Stop' : '🔊 Read aloud'}
+              </button>
+            )}
+
             <p className={`story-text ${fontSize.toLowerCase()}`}>{current.body}</p>
 
             <div className="moral-box">
@@ -292,7 +366,7 @@ function App() {
               <button
                 type="button"
                 className="another-btn"
-                onClick={() => { setIndex((index + 1) % stories.length); setReaction(null) }}
+                onClick={() => { stopSpeaking(); setIndex((index + 1) % stories.length); setReaction(null) }}
               >
                 🔄 Show another match ({index + 1}/{stories.length})
               </button>

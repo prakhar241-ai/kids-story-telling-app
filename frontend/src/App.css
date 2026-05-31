@@ -551,6 +551,66 @@ input[type='text']::placeholder {
   cursor: not-allowed;
 }
 
+/* ── Mic (voice search) button ── */
+.mic-btn {
+  flex-shrink: 0;
+  width: 50px;
+  border: none;
+  border-radius: 16px;
+  font-size: 1.3rem;
+  cursor: pointer;
+  background: linear-gradient(135deg, #7c5cff, #5b3ee8);
+  box-shadow: 0 8px 18px rgba(124, 92, 255, 0.4);
+  transition: all 0.18s ease;
+}
+
+.mic-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.mic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mic-btn.listening {
+  background: linear-gradient(135deg, #ff5b78, #e8243e);
+  animation: micPulse 1s infinite;
+}
+
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232, 36, 62, 0.5); }
+  50% { box-shadow: 0 0 0 10px rgba(232, 36, 62, 0); }
+}
+
+/* ── Read aloud button ── */
+.listen-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 18px;
+  border: none;
+  border-radius: 14px;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  color: white;
+  cursor: pointer;
+  background: linear-gradient(120deg, #36c5f0, #5b3ee8);
+  box-shadow: 0 8px 20px rgba(91, 62, 232, 0.35);
+  transition: all 0.18s ease;
+}
+
+.listen-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(91, 62, 232, 0.5);
+}
+
+.listen-btn.speaking {
+  background: linear-gradient(120deg, #ff8a5c, #ff5b78);
+  animation: micPulse 1.2s infinite;
+}
+
 /* ── Popular word chips ── */
 .chips {
   display: flex;
