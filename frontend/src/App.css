@@ -14,10 +14,15 @@
   --muted: #8b86a8;
 }
 
+html, body {
+  overflow-x: hidden;   /* never let the page shift sideways / clip content */
+}
+
 body {
   font-family: 'Fredoka', 'Segoe UI', sans-serif;
   color: var(--ink);
   min-height: 100vh;
+  width: 100%;
   background:
     radial-gradient(circle at 15% 20%, rgba(255, 174, 219, 0.55), transparent 40%),
     radial-gradient(circle at 85% 15%, rgba(130, 170, 255, 0.55), transparent 42%),
@@ -434,10 +439,18 @@ input[type='text']::placeholder {
   color: #3a3360;
   line-height: 1.85;
   font-size: 1.04rem;
+  padding: 0 4px;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .story-para {
   margin-bottom: 0.95em;
+}
+
+.story-para:first-child {
+  /* nudge the opening of the story in a little so the first words read clearly */
+  text-indent: 6px;
 }
 
 .story-para:last-child {
@@ -812,13 +825,46 @@ input[type='text']::placeholder {
 }
 
 /* ── Mobile tweaks ── */
-@media (max-width: 420px) {
+@media (max-width: 480px) {
+  body {
+    padding: 16px 12px 28px;
+  }
+
+  .app {
+    gap: 20px;
+  }
+
   .story-form {
-    padding: 24px 18px;
+    padding: 22px 16px;
+  }
+
+  .story-card {
+    padding: 22px 18px;
   }
 
   h1 {
-    font-size: 2.1rem;
+    font-size: 2rem;
+  }
+
+  .story-title {
+    font-size: 1.32rem;
+  }
+
+  /* Search row wraps: input on its own line, mic + Surprise below */
+  .search-row {
+    flex-wrap: wrap;
+  }
+
+  .search-row input[type='text'] {
+    flex: 1 1 100%;
+  }
+
+  .mic-btn {
+    flex: 0 0 auto;
+  }
+
+  .surprise-btn {
+    flex: 1 1 auto;
   }
 
   .age-btn {
@@ -830,8 +876,19 @@ input[type='text']::placeholder {
     flex-direction: column;
   }
 
+  /* Listen controls stack full width so nothing gets cut off */
+  .listen-btn {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .voice-toggle {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
   .float {
-    font-size: 1.5rem !important;
+    font-size: 1.4rem !important;
   }
 }
 
