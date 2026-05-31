@@ -106,10 +106,27 @@ function App() {
 
   return (
     <div className="app">
+      {/* Floating decorative background — purely visual */}
+      <div className="bg-decor" aria-hidden="true">
+        <span className="float f1">⭐</span>
+        <span className="float f2">🌙</span>
+        <span className="float f3">📚</span>
+        <span className="float f4">✨</span>
+        <span className="float f5">🎈</span>
+        <span className="float f6">🌈</span>
+        <span className="float f7">⭐</span>
+        <span className="float f8">🧸</span>
+      </div>
+
       <header className="header">
         <div className="logo">📖</div>
-        <h1>KidsAreBest22</h1>
+        <h1>KidsAreBest<span className="logo-22">22</span></h1>
         <p className="tagline">Magical stories for little hearts ✨</p>
+        <div className="badges">
+          <span className="badge">🤖 AI-powered</span>
+          <span className="badge">🇮🇳 Hindi &amp; English</span>
+          <span className="badge">💡 Moral in every tale</span>
+        </div>
       </header>
 
       <main className="main">
