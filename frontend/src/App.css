@@ -434,12 +434,29 @@ input[type='text']::placeholder {
   color: #3a3360;
   line-height: 1.85;
   font-size: 1.04rem;
-  white-space: pre-wrap;
+}
+
+.story-para {
+  margin-bottom: 0.95em;
+}
+
+.story-para:last-child {
+  margin-bottom: 0;
 }
 
 .story-text.small { font-size: 0.92rem; }
 .story-text.medium { font-size: 1.04rem; }
 .story-text.large { font-size: 1.22rem; line-height: 1.9; }
+
+/* Karaoke highlight — the sentence/part currently being read aloud */
+.reading {
+  background: linear-gradient(120deg, #fff0a8, #ffd98a);
+  border-radius: 6px;
+  padding: 1px 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+}
 
 .moral-box {
   margin-top: 22px;
@@ -584,10 +601,17 @@ input[type='text']::placeholder {
 }
 
 /* ── Read aloud button ── */
-.listen-btn {
-  display: block;
-  width: 100%;
+.listen-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.listen-btn {
+  flex: 1;
+  min-width: 150px;
   border: none;
   border-radius: 14px;
   padding: 12px;
@@ -599,6 +623,35 @@ input[type='text']::placeholder {
   background: linear-gradient(120deg, #36c5f0, #5b3ee8);
   box-shadow: 0 8px 20px rgba(91, 62, 232, 0.35);
   transition: all 0.18s ease;
+}
+
+/* Woman / Man voice toggle */
+.voice-toggle {
+  display: flex;
+  gap: 6px;
+  background: #f2eeff;
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.voice-opt {
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #6a6390;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.voice-opt.selected {
+  background: white;
+  color: var(--purple-deep);
+  box-shadow: 0 3px 8px rgba(91, 62, 232, 0.18);
 }
 
 .listen-btn:hover {

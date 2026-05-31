@@ -38,6 +38,39 @@ const TTS_SUPPORTED = typeof window !== 'undefined' && 'speechSynthesis' in wind
 const SpeechRec = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null
 const STT_SUPPORTED = !!SpeechRec
 
+// Split text into sentences, keeping punctuation + trailing space (works for English + Hindi)
+function splitSentences(text) {
+  const parts = text.match(/[^.!?।]+[.!?।]*\s*/g)
+  return parts ? parts.filter((s) => s.trim()) : [text]
+}
+
+// Turn a story into numbered, highlightable segments (title → sentences → moral).
+// The same numbering is used for both reading and on-screen highlighting.
+function buildReadModel(story) {
+  let idx = 0
+  const title = { text: story.title, idx: idx++ }
+  const paragraphs = story.body.split(/\n\n+/).map((p) => splitSentences(p).map((sent) => ({ text: sent, idx: idx++ })))
+  const moral = { text: `The End! Remember: ${story.moral}`, idx: idx++ }
+  return { title, paragraphs, moral }
+}
+
+// Name hints used to guess a voice's gender (the Web Speech API doesn't expose it)
+const FEMALE_HINTS = ['female', 'woman', 'zira', 'heera', 'kalpana', 'samantha', 'lekha', 'susan', 'linda', 'aria', 'jenny', 'swara', 'neerja', 'veena', 'tessa', 'fiona', 'karen', 'moira', 'catherine', 'google us english', 'google uk english female', 'google हिन्दी']
+const MALE_HINTS = ['male', ' man', 'david', 'mark', 'hemant', 'rishi', 'daniel', 'alex', 'ravi', 'prabhat', 'george', 'arthur', 'oliver', 'google uk english male']
+
+function pickVoice(language, gender) {
+  if (!TTS_SUPPORTED) return null
+  const voices = window.speechSynthesis.getVoices()
+  if (!voices.length) return null
+  const prefix = language === 'hindi' ? 'hi' : 'en'
+  const langVoices = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith(prefix))
+  const pool = langVoices.length ? langVoices : voices
+  const want = gender === 'man' ? MALE_HINTS : FEMALE_HINTS
+  const avoid = gender === 'man' ? FEMALE_HINTS : MALE_HINTS
+  const has = (v, list) => list.some((h) => v.name.toLowerCase().includes(h))
+  return pool.find((v) => has(v, want)) || pool.find((v) => !has(v, avoid)) || pool[0] || null
+}
+
 function App() {
   const [keyword, setKeyword] = useState('')
   const [age, setAge] = useState('')
@@ -52,6 +85,8 @@ function App() {
   const [reaction, setReaction] = useState(null)
   const [speaking, setSpeaking] = useState(false)
   const [listening, setListening] = useState(false)
+  const [voiceGender, setVoiceGender] = useState('woman')
+  const [activeIdx, setActiveIdx] = useState(-1)
 
   // Load the searchable words once (for the chips, with Hindi labels)
   useEffect(() => {
@@ -61,7 +96,17 @@ function App() {
       .catch(() => {})
   }, [])
 
+  // Warm up the voice list (voices load asynchronously in some browsers)
+  useEffect(() => {
+    if (!TTS_SUPPORTED) return
+    window.speechSynthesis.getVoices()
+    const handler = () => window.speechSynthesis.getVoices()
+    window.speechSynthesis.addEventListener('voiceschanged', handler)
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', handler)
+  }, [])
+
   const current = stories[index] || null
+  const readModel = current ? buildReadModel(current) : null
 
   const labelFor = (englishTerm) => {
     if (language !== 'hindi') return englishTerm
@@ -73,26 +118,40 @@ function App() {
   const stopSpeaking = () => {
     if (TTS_SUPPORTED) window.speechSynthesis.cancel()
     setSpeaking(false)
+    setActiveIdx(-1)
   }
 
   const toggleSpeak = () => {
-    if (!current) return
+    if (!current || !readModel) return
     if (speaking) { stopSpeaking(); return }
 
-    const text = `${current.title}.\n\n${current.body}\n\nThe End! Remember: ${current.moral}`
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = language === 'hindi' ? 'hi-IN' : 'en-US'
-    u.rate = 0.9   // a little slower for kids
-    u.pitch = 1.1  // a little friendlier
-    const voices = window.speechSynthesis.getVoices()
-    const match = voices.find((v) => v.lang === u.lang) || voices.find((v) => v.lang.startsWith(u.lang.slice(0, 2)))
-    if (match) u.voice = match
-    u.onend = () => setSpeaking(false)
-    u.onerror = () => setSpeaking(false)
+    // Flatten into ordered segments: title → each sentence → moral
+    const segs = [readModel.title, ...readModel.paragraphs.flat(), readModel.moral]
+    const voice = pickVoice(language, voiceGender)
+    const lang = language === 'hindi' ? 'hi-IN' : 'en-US'
 
     window.speechSynthesis.cancel()
-    window.speechSynthesis.speak(u)
+    segs.forEach((seg, k) => {
+      const u = new SpeechSynthesisUtterance(seg.text)
+      u.lang = lang
+      u.rate = 0.9    // a little slower for kids
+      u.pitch = 1.05
+      if (voice) u.voice = voice
+      // Highlight this segment as it starts being spoken
+      u.onstart = () => setActiveIdx(seg.idx)
+      if (k === segs.length - 1) {
+        u.onend = () => { setActiveIdx(-1); setSpeaking(false) }
+      }
+      u.onerror = () => { setActiveIdx(-1); setSpeaking(false) }
+      window.speechSynthesis.speak(u)
+    })
     setSpeaking(true)
+  }
+
+  const changeVoiceGender = (g) => {
+    if (g === voiceGender) return
+    stopSpeaking()
+    setVoiceGender(g)
   }
 
   // ── Voice: say a word to search (speech-to-text) ──
@@ -320,23 +379,53 @@ function App() {
               ))}
             </div>
 
-            <h2 className="story-title">{current.title}</h2>
+            <h2 className="story-title">
+              <span className={activeIdx === readModel.title.idx ? 'reading' : ''}>{current.title}</span>
+            </h2>
 
             {TTS_SUPPORTED && (
-              <button
-                type="button"
-                className={`listen-btn ${speaking ? 'speaking' : ''}`}
-                onClick={toggleSpeak}
-              >
-                {speaking ? '⏹️ Stop' : '🔊 Read aloud'}
-              </button>
+              <div className="listen-controls">
+                <button
+                  type="button"
+                  className={`listen-btn ${speaking ? 'speaking' : ''}`}
+                  onClick={toggleSpeak}
+                >
+                  {speaking ? '⏹️ Stop reading' : '🔊 Read aloud'}
+                </button>
+                <div className="voice-toggle">
+                  <button
+                    type="button"
+                    className={`voice-opt ${voiceGender === 'woman' ? 'selected' : ''}`}
+                    onClick={() => changeVoiceGender('woman')}
+                  >
+                    👩 Woman
+                  </button>
+                  <button
+                    type="button"
+                    className={`voice-opt ${voiceGender === 'man' ? 'selected' : ''}`}
+                    onClick={() => changeVoiceGender('man')}
+                  >
+                    👨 Man
+                  </button>
+                </div>
+              </div>
             )}
 
-            <p className={`story-text ${fontSize.toLowerCase()}`}>{current.body}</p>
+            <div className={`story-text ${fontSize.toLowerCase()}`}>
+              {readModel.paragraphs.map((para, pi) => (
+                <p key={pi} className="story-para">
+                  {para.map((sent) => (
+                    <span key={sent.idx} className={activeIdx === sent.idx ? 'reading' : ''}>{sent.text}</span>
+                  ))}
+                </p>
+              ))}
+            </div>
 
             <div className="moral-box">
               <span className="moral-label">🌟 The End!</span>
-              <p className="moral-text">Remember: {current.moral}</p>
+              <p className="moral-text">
+                <span className={activeIdx === readModel.moral.idx ? 'reading' : ''}>Remember: {current.moral}</span>
+              </p>
             </div>
 
             <div className="reactions">
