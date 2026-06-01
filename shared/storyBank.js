@@ -5,7 +5,7 @@
 //  backend and the Vercel serverless functions, so behaviour is
 //  identical everywhere and it deploys with no database engine needed.
 // ──────────────────────────────────────────────────────────────
-import { SUBJECTS, TEMPLATES } from './storyData.js'
+import { SUBJECTS, TEMPLATES, OPENERS, OPENERS_HI } from './storyData.js'
 
 const AGE_GROUPS = ['2-3', '4-6', '7-9']
 const MAX_RESULTS = 12
@@ -23,18 +23,25 @@ SUBJECTS.forEach((sub, i) => {
   const key = sub.term.toLowerCase()
   SEARCH_ITEMS.push({ key, term: sub.term, term_hi: sub.termHi, category: sub.category })
 
-  const ctx = { hero: sub.term, heroHi: sub.termHi, place: sub.place, placeHi: sub.placeHi }
-
-  for (const age of AGE_GROUPS) {
+  AGE_GROUPS.forEach((age, ageIdx) => {
     const pool = byAge[age]
     const tpl = pool[i % pool.length] // rotate templates so neighbours differ
+
+    // Opener shifts by subject AND age, so a subject's three stories start differently
+    const oIdx = (i + ageIdx) % OPENERS.length
+    const ctx = {
+      hero: sub.term, heroHi: sub.termHi,
+      place: sub.place, placeHi: sub.placeHi,
+      trait: sub.trait, traitHi: sub.traitHi,
+      opener: OPENERS[oIdx], openerHi: OPENERS_HI[oIdx],
+    }
 
     const en = tpl.en(ctx)
     STORIES.push({ subjectKey: key, subject: sub.term, category: sub.category, ageGroup: age, language: 'english', title: en.title, body: en.body, moral: en.moral })
 
     const hi = tpl.hi(ctx)
     STORIES.push({ subjectKey: key, subject: sub.termHi, category: sub.category, ageGroup: age, language: 'hindi', title: hi.title, body: hi.body, moral: hi.moral })
-  }
+  })
 })
 
 // The searchable words (for the chips).
