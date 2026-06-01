@@ -10,6 +10,13 @@ import { SUBJECTS, TEMPLATES, OPENERS, OPENERS_HI } from './storyData.js'
 const AGE_GROUPS = ['2-3', '4-6', '7-9']
 const MAX_RESULTS = 12
 
+// Grammatically feminine Hindi subjects — used so verbs agree (e.g. खेली, not खेला)
+const FEMININE_HI = new Set([
+  'लोमड़ी', 'गाय', 'बकरी', 'बिल्ली', 'गिलहरी', 'गौरैया', 'बत्तख', 'कोयल',
+  'चमेली', 'लिली', 'डेज़ी', 'चंपा', 'स्ट्रॉबेरी',
+  'रेलगाड़ी', 'कार', 'नाव', 'बस', 'साइकिल', 'जलपरी', 'परी',
+])
+
 // Build the full list once, when this module loads.
 export const STORIES = []
 export const SEARCH_ITEMS = []
@@ -29,11 +36,14 @@ SUBJECTS.forEach((sub, i) => {
 
     // Opener shifts by subject AND age, so a subject's three stories start differently
     const oIdx = (i + ageIdx) % OPENERS.length
+    const isFem = FEMININE_HI.has(sub.termHi)
     const ctx = {
       hero: sub.term, heroHi: sub.termHi,
       place: sub.place, placeHi: sub.placeHi,
       trait: sub.trait, traitHi: sub.traitHi,
       opener: OPENERS[oIdx], openerHi: OPENERS_HI[oIdx],
+      // gender-agreeing verb picker for Hindi (m form, f form)
+      g: (m, f) => (isFem ? f : m),
     }
 
     const en = tpl.en(ctx)

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
 const AGE_GROUPS = [
@@ -23,6 +23,24 @@ const FUN_LIST = ['Dinosaur', 'Mermaid', 'Robot', 'Cupcake', 'Wizard', 'Unicorn'
 
 const FONT_SIZES = ['Small', 'Medium', 'Large']
 const REACTIONS = ['😍', '🤩', '😄']
+
+// Brand + standard info pages (opened from the footer links)
+const BRAND = 'StoryNest'
+const CONTACT = 'prakhar2goel@gmail.com'
+const PAGES = {
+  about: {
+    title: `About ${BRAND}`,
+    body: `${BRAND} makes free, safe, age-appropriate stories for curious kids aged 4–12. Every tale is hand-written and carefully screened to be gentle, positive, and fun.\n\nStories come in both English and Hindi, with a read-aloud voice so even the littlest listeners can enjoy them. No accounts, no ads, no clutter — just stories.`,
+  },
+  safety: {
+    title: 'Safety Policy',
+    body: `Every story on ${BRAND} follows strict content rules: no violence, nothing scary or upsetting, no bad language, and always a happy ending with a gentle moral.\n\nSearch words are filtered to keep things kid-friendly, and there are no ads or links that take a child away from the app. Stories are written and reviewed by us — never shown unsupervised.`,
+  },
+  privacy: {
+    title: 'Privacy',
+    body: `We don't collect any personal data. ${BRAND} has no accounts, no sign-ups, and no tracking cookies or analytics that identify you.\n\nNothing you type or tap is stored or shared. The voice features (read-aloud and voice search) run entirely in your own browser and are never recorded or sent anywhere.\n\nQuestions? Email us at ${CONTACT}.`,
+  },
+}
 
 // Client-side instant safety check (backend double-checks too)
 const BLOCKED = ['violence', 'violent', 'weapon', 'gun', 'knife', 'bomb', 'sword', 'death', 'dead', 'die', 'kill', 'murder', 'blood', 'gore', 'hurt', 'fight', 'war', 'attack', 'scary', 'fear', 'horror', 'ghost', 'zombie', 'monster', 'devil', 'demon', 'nightmare', 'sex', 'naked', 'nude', 'porn', 'kiss', 'drug', 'alcohol', 'wine', 'beer', 'smoke', 'hate', 'stupid', 'idiot', 'dumb', 'ugly']
@@ -58,17 +76,22 @@ function buildReadModel(story) {
 const FEMALE_HINTS = ['female', 'woman', 'zira', 'heera', 'kalpana', 'samantha', 'lekha', 'susan', 'linda', 'aria', 'jenny', 'swara', 'neerja', 'veena', 'tessa', 'fiona', 'karen', 'moira', 'catherine', 'google us english', 'google uk english female', 'google हिन्दी']
 const MALE_HINTS = ['male', ' man', 'david', 'mark', 'hemant', 'rishi', 'daniel', 'alex', 'ravi', 'prabhat', 'george', 'arthur', 'oliver', 'google uk english male']
 
-function pickVoice(language, gender) {
-  if (!TTS_SUPPORTED) return null
-  const voices = window.speechSynthesis.getVoices()
-  if (!voices.length) return null
+function voicesFor(language) {
+  if (!TTS_SUPPORTED) return []
   const prefix = language === 'hindi' ? 'hi' : 'en'
-  const langVoices = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith(prefix))
-  const pool = langVoices.length ? langVoices : voices
+  return window.speechSynthesis.getVoices().filter((v) => v.lang && v.lang.toLowerCase().startsWith(prefix))
+}
+
+function pickVoice(language, gender) {
+  const langVoices = voicesFor(language)
+  // Never force a voice from another language — an English voice can't read Hindi
+  // (it just stays silent). If there's no matching voice, return null and let the
+  // browser fall back on its own.
+  if (!langVoices.length) return null
   const want = gender === 'man' ? MALE_HINTS : FEMALE_HINTS
   const avoid = gender === 'man' ? FEMALE_HINTS : MALE_HINTS
   const has = (v, list) => list.some((h) => v.name.toLowerCase().includes(h))
-  return pool.find((v) => has(v, want)) || pool.find((v) => !has(v, avoid)) || pool[0] || null
+  return langVoices.find((v) => has(v, want)) || langVoices.find((v) => !has(v, avoid)) || langVoices[0]
 }
 
 function App() {
@@ -87,6 +110,9 @@ function App() {
   const [listening, setListening] = useState(false)
   const [voiceGender, setVoiceGender] = useState('woman')
   const [activeIdx, setActiveIdx] = useState(-1)
+  const [infoPage, setInfoPage] = useState(null)
+  const [voiceNote, setVoiceNote] = useState('')
+  const speakTokenRef = useRef(0) // invalidates an in-progress read when we stop/restart
 
   // Load the searchable words once (for the chips, with Hindi labels)
   useEffect(() => {
@@ -116,36 +142,63 @@ function App() {
 
   // ── Voice: read the story aloud (text-to-speech) ──
   const stopSpeaking = () => {
+    speakTokenRef.current++ // any in-flight chain will see a stale token and stop
     if (TTS_SUPPORTED) window.speechSynthesis.cancel()
     setSpeaking(false)
     setActiveIdx(-1)
+    setVoiceNote('')
   }
 
   const toggleSpeak = () => {
     if (!current || !readModel) return
     if (speaking) { stopSpeaking(); return }
 
-    // Flatten into ordered segments: title → each sentence → moral
-    const segs = [readModel.title, ...readModel.paragraphs.flat(), readModel.moral]
     const voice = pickVoice(language, voiceGender)
     const lang = language === 'hindi' ? 'hi-IN' : 'en-US'
+    const allVoices = TTS_SUPPORTED ? window.speechSynthesis.getVoices() : []
 
+    // Only warn if voices ARE loaded but none exist for this language (reading would be
+    // silent). If the list isn't loaded yet, attempt anyway and let the browser fall back.
+    if (!voice && allVoices.length && !voicesFor(language).length) {
+      setVoiceNote(
+        language === 'hindi'
+          ? 'This browser has no Hindi voice installed, so Hindi read-aloud is silent here. Try Chrome or Edge, which include a Hindi voice. 🙂'
+          : 'No English voice is available on this device for read-aloud.'
+      )
+      return
+    }
+    setVoiceNote('')
+
+    // Flatten into ordered segments: title → each sentence → moral
+    const segs = [readModel.title, ...readModel.paragraphs.flat(), readModel.moral]
+
+    // Speak ONE sentence at a time, chaining each on the previous one's `onend`.
+    // Queuing all utterances at once is unreliable in Chrome with remote voices
+    // (the Hindi voice is remote) and can play nothing. Chaining fixes that and
+    // keeps the highlight in sync.
     window.speechSynthesis.cancel()
-    segs.forEach((seg, k) => {
+    const myToken = ++speakTokenRef.current
+    setSpeaking(true)
+
+    const speakSeg = (i) => {
+      if (myToken !== speakTokenRef.current) return // stopped or superseded
+      if (i >= segs.length) { setActiveIdx(-1); setSpeaking(false); return }
+      const seg = segs[i]
       const u = new SpeechSynthesisUtterance(seg.text)
       u.lang = lang
       u.rate = 0.9    // a little slower for kids
-      u.pitch = 1.05
+      // Pitch carries the Man/Woman difference. This matters most for Hindi, where
+      // Chrome has only one (female) voice — a lower pitch makes the Man option sound male.
+      u.pitch = voiceGender === 'man' ? 0.8 : 1.2
       if (voice) u.voice = voice
-      // Highlight this segment as it starts being spoken
-      u.onstart = () => setActiveIdx(seg.idx)
-      if (k === segs.length - 1) {
-        u.onend = () => { setActiveIdx(-1); setSpeaking(false) }
-      }
-      u.onerror = () => { setActiveIdx(-1); setSpeaking(false) }
+      u.onstart = () => { if (myToken === speakTokenRef.current) setActiveIdx(seg.idx) }
+      u.onend = () => speakSeg(i + 1)
+      u.onerror = () => { if (myToken === speakTokenRef.current) { setActiveIdx(-1); setSpeaking(false) } }
       window.speechSynthesis.speak(u)
-    })
-    setSpeaking(true)
+    }
+
+    // small delay lets cancel() settle (a Chrome quirk) before the first utterance
+    setTimeout(() => speakSeg(0), 60)
   }
 
   const changeVoiceGender = (g) => {
@@ -248,20 +301,9 @@ function App() {
 
   return (
     <div className="app">
-      <div className="bg-decor" aria-hidden="true">
-        <span className="float f1">⭐</span>
-        <span className="float f2">🌙</span>
-        <span className="float f3">📚</span>
-        <span className="float f4">✨</span>
-        <span className="float f5">🎈</span>
-        <span className="float f6">🌈</span>
-        <span className="float f7">⭐</span>
-        <span className="float f8">🧸</span>
-      </div>
-
       <header className="header">
         <div className="logo">📖</div>
-        <h1>KidsAreBest<span className="logo-22">22</span></h1>
+        <h1>Story<span className="brand-accent">Nest</span></h1>
         <p className="tagline">Type a fun word and find a magical story ✨</p>
         <div className="badges">
           <span className="badge">📚 400+ stories</span>
@@ -269,6 +311,21 @@ function App() {
           <span className="badge">💡 Moral in every tale</span>
         </div>
       </header>
+
+      <section className="trust-banner" aria-label="Safe for kids">
+        <div className="trust-item">
+          <span className="trust-icon" aria-hidden="true">🔒</span>
+          <span className="trust-text">No accounts, no data collected, ever</span>
+        </div>
+        <div className="trust-item">
+          <span className="trust-icon" aria-hidden="true">🛡️</span>
+          <span className="trust-text">Every story is age-appropriate, no violence, no ads</span>
+        </div>
+        <div className="trust-item">
+          <span className="trust-icon" aria-hidden="true">🚫</span>
+          <span className="trust-text">No external links or tracking</span>
+        </div>
+      </section>
 
       <main className="main">
         <form className="story-form" onSubmit={handleSubmit}>
@@ -288,7 +345,7 @@ function App() {
               {STT_SUPPORTED && (
                 <button
                   type="button"
-                  className={`mic-btn ${listening ? 'listening' : ''}`}
+                  className={`btn-audio btn-icon mic-btn ${listening ? 'is-listening' : ''}`}
                   onClick={startListening}
                   disabled={loading}
                   title="Say a word"
@@ -297,7 +354,7 @@ function App() {
                   {listening ? '🎙️' : '🎤'}
                 </button>
               )}
-              <button type="button" className="surprise-btn" onClick={handleSurprise} disabled={loading}>
+              <button type="button" className="btn-magic" onClick={handleSurprise} disabled={loading}>
                 🎲 Surprise Me!
               </button>
             </div>
@@ -310,7 +367,7 @@ function App() {
                 <button
                   key={term}
                   type="button"
-                  className="chip"
+                  className="btn-ghost chip"
                   onClick={() => handleChip(term)}
                   disabled={loading}
                 >
@@ -327,7 +384,7 @@ function App() {
                 <button
                   key={g.value}
                   type="button"
-                  className={`age-btn ${age === g.value ? 'selected' : ''}`}
+                  className={`btn-ghost age-btn ${age === g.value ? 'is-selected' : ''}`}
                   onClick={() => setAge(g.value)}
                   disabled={loading}
                 >
@@ -345,7 +402,7 @@ function App() {
                 <button
                   key={l.value}
                   type="button"
-                  className={`lang-btn ${language === l.value ? 'selected' : ''}`}
+                  className={`btn-ghost lang-btn ${language === l.value ? 'is-selected' : ''}`}
                   onClick={() => setLanguage(l.value)}
                   disabled={loading}
                 >
@@ -356,14 +413,29 @@ function App() {
             </div>
           </div>
 
-          <button type="submit" className="submit-btn" disabled={loading}>
+          <button type="submit" className="btn-primary btn-block submit-btn" disabled={loading}>
             {loading ? '✨ Finding your story…' : '✨ Find a Story ✨'}
           </button>
         </form>
 
-        {message && <div className="message-card">{message}</div>}
+        {loading && (
+          <div className="state-card" aria-live="polite">
+            <div className="spinner" />
+            <p className="state-text">Finding a magical story…</p>
+          </div>
+        )}
 
-        {current && (
+        {message && !loading && <div className="message-card">{message}</div>}
+
+        {!loading && !current && !message && (
+          <div className="state-card">
+            <span className="state-emoji" aria-hidden="true">📚</span>
+            <p className="state-title">Ready for a story?</p>
+            <p className="state-text">Pick an age and language, then type a fun word (like “unicorn”) or tap a chip above.</p>
+          </div>
+        )}
+
+        {current && !loading && (
           <div className="story-card">
             <div className="font-toggle">
               <span className="font-label">Text size:</span>
@@ -371,7 +443,7 @@ function App() {
                 <button
                   key={f}
                   type="button"
-                  className={`font-btn ${fontSize === f ? 'selected' : ''}`}
+                  className={`btn-ghost font-btn ${fontSize === f ? 'is-selected' : ''}`}
                   onClick={() => setFontSize(f)}
                 >
                   {f}
@@ -384,10 +456,11 @@ function App() {
             </h2>
 
             {TTS_SUPPORTED && (
+              <>
               <div className="listen-controls">
                 <button
                   type="button"
-                  className={`listen-btn ${speaking ? 'speaking' : ''}`}
+                  className={`btn-audio listen-btn ${speaking ? 'is-speaking' : ''}`}
                   onClick={toggleSpeak}
                 >
                   {speaking ? '⏹️ Stop reading' : '🔊 Read aloud'}
@@ -395,20 +468,22 @@ function App() {
                 <div className="voice-toggle">
                   <button
                     type="button"
-                    className={`voice-opt ${voiceGender === 'woman' ? 'selected' : ''}`}
+                    className={`btn-ghost voice-opt ${voiceGender === 'woman' ? 'is-selected' : ''}`}
                     onClick={() => changeVoiceGender('woman')}
                   >
                     👩 Woman
                   </button>
                   <button
                     type="button"
-                    className={`voice-opt ${voiceGender === 'man' ? 'selected' : ''}`}
+                    className={`btn-ghost voice-opt ${voiceGender === 'man' ? 'is-selected' : ''}`}
                     onClick={() => changeVoiceGender('man')}
                   >
                     👨 Man
                   </button>
                 </div>
               </div>
+              {voiceNote && <p className="voice-note">🔈 {voiceNote}</p>}
+              </>
             )}
 
             <div className={`story-text ${fontSize.toLowerCase()}`}>
@@ -434,7 +509,7 @@ function App() {
                 <button
                   key={emoji}
                   type="button"
-                  className={`reaction-btn ${reaction === emoji ? 'picked' : ''}`}
+                  className={`btn-ghost reaction-btn ${reaction === emoji ? 'is-picked' : ''}`}
                   onClick={() => setReaction(emoji)}
                 >
                   {emoji}
@@ -443,10 +518,10 @@ function App() {
             </div>
 
             <div className="share-buttons">
-              <button type="button" className="share-btn copy-btn" onClick={handleCopy}>
+              <button type="button" className="btn-ghost" onClick={handleCopy}>
                 {copied ? '✅ Copied!' : '📋 Copy story'}
               </button>
-              <button type="button" className="share-btn whatsapp-btn" onClick={handleWhatsApp}>
+              <button type="button" className="btn-share" onClick={handleWhatsApp}>
                 💬 Share on WhatsApp
               </button>
             </div>
@@ -454,7 +529,7 @@ function App() {
             {stories.length > 1 && (
               <button
                 type="button"
-                className="another-btn"
+                className="btn-primary btn-block another-btn"
                 onClick={() => { stopSpeaking(); setIndex((index + 1) % stories.length); setReaction(null) }}
               >
                 🔄 Show another match ({index + 1}/{stories.length})
@@ -465,8 +540,27 @@ function App() {
       </main>
 
       <footer className="footer">
-        Made with ❤️ for @kidsarebest22
+        <div className="footer-brand">{BRAND}</div>
+        <p className="footer-mission">Free, safe stories for curious kids.</p>
+        <a className="footer-email" href={`mailto:${CONTACT}`}>{CONTACT}</a>
+        <nav className="footer-links">
+          <button type="button" onClick={() => setInfoPage('about')}>About</button>
+          <span className="footer-sep" aria-hidden="true">|</span>
+          <button type="button" onClick={() => setInfoPage('safety')}>Safety Policy</button>
+          <span className="footer-sep" aria-hidden="true">|</span>
+          <button type="button" onClick={() => setInfoPage('privacy')}>Privacy</button>
+        </nav>
       </footer>
+
+      {infoPage && (
+        <div className="info-overlay" onClick={() => setInfoPage(null)}>
+          <div className="info-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <button className="info-close" onClick={() => setInfoPage(null)} aria-label="Close">✕</button>
+            <h2 className="info-title">{PAGES[infoPage].title}</h2>
+            <p className="info-body">{PAGES[infoPage].body}</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
