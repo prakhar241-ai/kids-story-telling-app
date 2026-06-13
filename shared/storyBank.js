@@ -1,60 +1,14 @@
 // ──────────────────────────────────────────────────────────────
-//  The story bank — single source of truth at RUNTIME.
-//  Generates all stories in memory from storyData.js (same logic the
-//  seed script uses to build stories.db). Used by BOTH the local
-//  backend and the Vercel serverless functions, so behaviour is
-//  identical everywhere and it deploys with no database engine needed.
+//  Runtime READ layer.
+//  Serves stories from the bundled export (shared/storiesData.js), which is
+//  generated from the ACTIVE database table by backend/db/export.js.
+//  Keep this a pure query layer — no story generation lives here.
 // ──────────────────────────────────────────────────────────────
-import { SUBJECTS, TEMPLATES, OPENERS, OPENERS_HI } from './storyData.js'
+import { STORIES, SEARCH_ITEMS } from './storiesData.js'
 
-const AGE_GROUPS = ['2-3', '4-6', '7-9']
 const MAX_RESULTS = 12
 
-// Grammatically feminine Hindi subjects — used so verbs agree (e.g. खेली, not खेला)
-const FEMININE_HI = new Set([
-  'लोमड़ी', 'गाय', 'बकरी', 'बिल्ली', 'गिलहरी', 'गौरैया', 'बत्तख', 'कोयल',
-  'चमेली', 'लिली', 'डेज़ी', 'चंपा', 'स्ट्रॉबेरी',
-  'रेलगाड़ी', 'कार', 'नाव', 'बस', 'साइकिल', 'जलपरी', 'परी',
-])
-
-// Build the full list once, when this module loads.
-export const STORIES = []
-export const SEARCH_ITEMS = []
-
-const byAge = {}
-for (const age of AGE_GROUPS) {
-  byAge[age] = TEMPLATES.filter((t) => t.ages.includes(age))
-}
-
-SUBJECTS.forEach((sub, i) => {
-  const key = sub.term.toLowerCase()
-  SEARCH_ITEMS.push({ key, term: sub.term, term_hi: sub.termHi, category: sub.category })
-
-  AGE_GROUPS.forEach((age, ageIdx) => {
-    const pool = byAge[age]
-    const tpl = pool[i % pool.length] // rotate templates so neighbours differ
-
-    // Opener shifts by subject AND age, so a subject's three stories start differently
-    const oIdx = (i + ageIdx) % OPENERS.length
-    const isFem = FEMININE_HI.has(sub.termHi)
-    const ctx = {
-      hero: sub.term, heroHi: sub.termHi,
-      place: sub.place, placeHi: sub.placeHi,
-      trait: sub.trait, traitHi: sub.traitHi,
-      opener: OPENERS[oIdx], openerHi: OPENERS_HI[oIdx],
-      // gender-agreeing verb picker for Hindi (m form, f form)
-      g: (m, f) => (isFem ? f : m),
-    }
-
-    const en = tpl.en(ctx)
-    STORIES.push({ subjectKey: key, subject: sub.term, category: sub.category, ageGroup: age, language: 'english', title: en.title, body: en.body, moral: en.moral })
-
-    const hi = tpl.hi(ctx)
-    STORIES.push({ subjectKey: key, subject: sub.termHi, category: sub.category, ageGroup: age, language: 'hindi', title: hi.title, body: hi.body, moral: hi.moral })
-  })
-})
-
-// The searchable words (for the chips).
+// The searchable words (for the chips). Keywords are unchanged across versions.
 export function listSearchItems() {
   return SEARCH_ITEMS.map(({ term, term_hi, category }) => ({ term, term_hi, category }))
 }

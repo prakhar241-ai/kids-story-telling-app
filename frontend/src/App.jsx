@@ -96,7 +96,7 @@ function pickVoice(language, gender) {
 
 function App() {
   const [keyword, setKeyword] = useState('')
-  const [age, setAge] = useState('')
+  const [age, setAge] = useState('4-6') // default to "4–6 years"
   const [language, setLanguage] = useState('')
   const [loading, setLoading] = useState(false)
   const [stories, setStories] = useState([])
@@ -502,6 +502,10 @@ function App() {
                 <span className={activeIdx === readModel.moral.idx ? 'reading' : ''}>Remember: {current.moral}</span>
               </p>
             </div>
+
+            {current.sourceReference && (
+              <p className="source-ref">📜 {current.sourceReference}</p>
+            )}
 
             <div className="reactions">
               <span className="reactions-label">Did you like it?</span>

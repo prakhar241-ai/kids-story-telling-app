@@ -309,6 +309,7 @@ input[type='text']::placeholder { color: var(--mist); }
 }
 .moral-label { font-size: 0.8rem; font-weight: 800; color: var(--plum-dark); letter-spacing: 0.5px; }
 .moral-text { margin-top: 6px; color: var(--ink); font-weight: 700; font-size: 1.02rem; line-height: 1.5; }
+.source-ref { margin-top: 12px; text-align: center; color: var(--slate); font-size: 0.82rem; font-style: italic; }
 
 /* Reactions */
 .reactions { display: flex; align-items: center; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
